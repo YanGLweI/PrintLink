@@ -45,7 +45,7 @@ function displayName(name: string): string {
       class="printer-table"
       empty-text=" "
     >
-      <el-table-column label="打印机名称" min-width="160">
+      <el-table-column label="打印机名称" min-width="150">
         <template #default="{ row }">
           <div class="printer-name-cell">
             <el-icon class="printer-icon"><Printer /></el-icon>
@@ -62,18 +62,18 @@ function displayName(name: string): string {
           </div>
         </template>
       </el-table-column>
-      <el-table-column label="端口" min-width="200">
+      <el-table-column label="端口" min-width="175">
         <template #default="{ row }">
           <span class="mono">{{ row.port_name }}</span>
         </template>
       </el-table-column>
-      <el-table-column prop="driver_name" label="驱动" min-width="150" />
-      <el-table-column label="状态" width="80" align="center">
+      <el-table-column prop="driver_name" label="驱动" min-width="135" />
+      <el-table-column label="状态" width="72" align="center">
         <template #default="{ row }">
           <el-tag size="small" type="success" effect="light">{{ row.status }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="270" align="center" fixed="right">
+      <el-table-column label="操作" width="218" align="center" fixed="right">
         <template #default="{ row }">
           <div class="action-group">
             <el-button size="small" @click="emit('open-property', row)">属性</el-button>
@@ -86,6 +86,15 @@ function displayName(name: string): string {
               @click="emit('set-default', row)"
             >
               设为默认
+            </el-button>
+            <el-button
+              v-else
+              size="small"
+              type="success"
+              plain
+              disabled
+            >
+              当前默认
             </el-button>
             <el-button
               size="small"
@@ -164,9 +173,18 @@ function displayName(name: string): string {
 }
 
 .action-group {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  justify-content: center;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  width: 100%;
+}
+
+.action-group :deep(.el-button) {
+  margin-left: 0;
+  width: 100%;
+}
+
+.action-group :deep(.el-button + .el-button) {
+  margin-left: 0;
 }
 </style>

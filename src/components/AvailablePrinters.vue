@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { ref } from "vue";
 import type { PrinterItem } from "../types/printer";
 
 const props = defineProps<{
   printers: PrinterItem[];
   loading: boolean;
   connectedNames: string[];
+  /** 正在连接中的打印机共享路径（由父组件根据真实连接进度维护） */
+  connectingPaths: string[];
 }>();
 
 const emit = defineEmits<{
@@ -13,19 +14,14 @@ const emit = defineEmits<{
   connect: [printer: PrinterItem];
 }>();
 
-// 正在连接的打印机路径集合（防止重复点击）
-const connectingPaths = ref<Set<string>>(new Set());
+function isConnecting(printer: PrinterItem): boolean {
+  return props.connectingPaths.includes(printer.share_path);
+}
 
-async function handleConnect(printer: PrinterItem) {
-  if (connectingPaths.value.has(printer.share_path)) return;
-  connectingPaths.value.add(printer.share_path);
-  try {
-    emit("connect", printer);
-    // 等待一小段时间让父组件处理，实际 loading 由父组件的 refresh 控制
-    await new Promise((r) => setTimeout(r, 1500));
-  } finally {
-    connectingPaths.value.delete(printer.share_path);
-  }
+function handleConnect(printer: PrinterItem) {
+  // 连接中则拦截重复点击；loading 状态由父组件的真实连接进度驱动
+  if (isConnecting(printer)) return;
+  emit("connect", printer);
 }
 
 function isConnected(printer: PrinterItem): boolean {
@@ -93,10 +89,10 @@ function isConnected(printer: PrinterItem): boolean {
             v-else
             size="small"
             type="primary"
-            :loading="connectingPaths.has(row.share_path)"
+            :loading="isConnecting(row)"
             @click="handleConnect(row)"
           >
-            连接
+            {{ isConnecting(row) ? "连接中" : "连接" }}
           </el-button>
         </template>
       </el-table-column>

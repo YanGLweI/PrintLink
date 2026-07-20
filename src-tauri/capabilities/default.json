@@ -8,6 +8,10 @@
     "core:window:allow-hide",
     "core:window:allow-show",
     "core:window:allow-set-focus",
-    "core:event:default"
+    "core:event:default",
+    {
+      "identifier": "opener:allow-open-url",
+      "allow": [{ "url": "https://yanglwei.github.io/*" }]
+    }
   ]
 }

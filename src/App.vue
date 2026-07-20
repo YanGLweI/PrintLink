@@ -2,6 +2,7 @@
 import { ref, onMounted, onUnmounted } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { ElMessage, ElMessageBox } from "element-plus";
 import StatusBar from "./components/StatusBar.vue";
 import AvailablePrinters from "./components/AvailablePrinters.vue";
@@ -15,6 +16,8 @@ const availablePrinters = ref<PrinterItem[]>([]);
 const connectedPrinters = ref<LocalPrinterItem[]>([]);
 const loadingAvailable = ref(false);
 const loadingConnected = ref(false);
+// 正在连接中的打印机共享路径（驱动子组件按钮 loading 状态）
+const connectingPaths = ref<string[]>([]);
 const activeTab = ref("available");
 const logMessage = ref("正在初始化...");
 
@@ -23,6 +26,16 @@ let unlistenRefresh: UnlistenFn | null = null;
 // ===== 日志 =====
 function setLog(msg: string) {
   logMessage.value = msg;
+}
+
+// ===== 打开开发者 GitHub 主页 =====
+async function openGitHub() {
+  try {
+    await openUrl("https://yanglwei.github.io/");
+  } catch (e) {
+    ElMessage.error("无法打开 GitHub 主页");
+    setLog(String(e));
+  }
 }
 
 // ===== 初始化 =====
@@ -80,6 +93,9 @@ async function refreshConnected() {
 
 // ===== 连接打印机 =====
 async function handleConnect(printer: PrinterItem) {
+  // 重复点击拦截：连接中直接返回
+  if (connectingPaths.value.includes(printer.share_path)) return;
+  connectingPaths.value.push(printer.share_path);
   try {
     const msg = await invoke<string>("connect_printer", {
       printerPath: printer.share_path,
@@ -91,6 +107,11 @@ async function handleConnect(printer: PrinterItem) {
     const err = String(e);
     ElMessage.error(err);
     setLog(err);
+  } finally {
+    // 无论成败，连接结束后才释放 loading，保证状态与真实进度一致
+    connectingPaths.value = connectingPaths.value.filter(
+      (p) => p !== printer.share_path
+    );
   }
 }
 
@@ -201,6 +222,7 @@ onUnmounted(() => {
             :printers="availablePrinters"
             :loading="loadingAvailable"
             :connected-names="connectedPrinters.map((p) => p.name.toLowerCase())"
+            :connecting-paths="connectingPaths"
             @refresh="refreshAvailable"
             @connect="handleConnect"
           />
@@ -236,6 +258,7 @@ onUnmounted(() => {
     <footer class="app-footer">
       <el-icon class="footer-icon"><InfoFilled /></el-icon>
       <span class="footer-log">{{ logMessage }}</span>
+      <a class="footer-credit" @click="openGitHub">Developed by Yeunglw</a>
     </footer>
   </div>
 </template>
@@ -394,5 +417,21 @@ body,
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.footer-credit {
+  margin-left: auto;
+  flex-shrink: 0;
+  color: #64748b;
+  font-size: 12px;
+  cursor: pointer;
+  text-decoration: none;
+  user-select: none;
+  transition: color 0.2s ease;
+}
+
+.footer-credit:hover {
+  color: #38bdf8;
+  text-decoration: underline;
 }
 </style>

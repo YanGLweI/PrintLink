@@ -13,6 +13,8 @@ pub fn run() {
     utils::init_logger();
 
     tauri::Builder::default()
+        // 注册 opener 插件（用于打开外部浏览器链接）
+        .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             // 初始化系统托盘
             tray::setup_tray(app.handle())?;
