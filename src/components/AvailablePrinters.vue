@@ -2,7 +2,7 @@
 import { ref } from "vue";
 import type { PrinterItem } from "../types/printer";
 
-defineProps<{
+const props = defineProps<{
   printers: PrinterItem[];
   loading: boolean;
   connectedNames: string[];
@@ -29,7 +29,7 @@ async function handleConnect(printer: PrinterItem) {
 }
 
 function isConnected(printer: PrinterItem): boolean {
-  return connectedNames.includes(printer.share_path.toLowerCase());
+  return props.connectedNames.includes(printer.share_path.toLowerCase());
 }
 </script>
 

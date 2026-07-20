@@ -2,17 +2,18 @@
 //! 枚举 \\10.60.254.90 打印服务器下所有共享打印机
 
 use serde::Serialize;
-use windows::core::HSTRING;
+use windows::core::{HSTRING, PWSTR};
 use windows::Win32::Foundation::{
-    GetLastError, ERROR_INSUFFICIENT_BUFFER, ERROR_MORE_DATA, ERROR_NO_MORE_ITEMS, NO_ERROR,
+    GetLastError, HANDLE, ERROR_INSUFFICIENT_BUFFER, ERROR_MORE_DATA, ERROR_NO_MORE_ITEMS,
+    NO_ERROR,
 };
 use windows::Win32::Graphics::Printing::{
-    EnumPrintersW, GetPrinterW, OpenPrinterW, ClosePrinter, PRINTER_ENUM_NETWORK,
+    ClosePrinter, EnumPrintersW, GetPrinterW, OpenPrinterW, PRINTER_ENUM_NETWORK,
     PRINTER_INFO_1W, PRINTER_INFO_2W,
 };
 use windows::Win32::NetworkManagement::WNet::{
-    WNetCloseEnum, WNetEnumResourceW, WNetOpenEnumW, NETRESOURCEW, RESOURCE_CONNECTED,
-    RESOURCETYPE_PRINT, RESOURCEUSAGE_ALL,
+    WNetCloseEnum, WNetEnumResourceW, WNetOpenEnumW, NETRESOURCEW, NET_RESOURCE_SCOPE,
+    RESOURCE_GLOBALNET, RESOURCETYPE_PRINT, RESOURCEUSAGE_ALL, RESOURCEUSAGE_CONTAINER,
 };
 
 use crate::credential::wide_ptr_to_string;
@@ -64,17 +65,16 @@ fn enum_printers_network(server_unc: &str) -> Result<Vec<PrinterItem>, String> {
         // 第一次调用获取所需缓冲区大小
         let _ = EnumPrintersW(
             PRINTER_ENUM_NETWORK,
-            windows::core::PCWSTR(server_w.as_ptr()),
+            &server_w,
             1,
             None,
-            0,
             &mut needed,
             &mut returned,
         );
 
         let err = GetLastError();
         if err != ERROR_INSUFFICIENT_BUFFER && err != ERROR_MORE_DATA {
-            if returned == 0 {
+            if returned == 0 && needed == 0 {
                 return Ok(Vec::new());
             }
             return Err(win_error_message("打印机列表枚举", err.0));
@@ -87,10 +87,9 @@ fn enum_printers_network(server_unc: &str) -> Result<Vec<PrinterItem>, String> {
         let mut buf: Vec<u8> = vec![0; needed as usize];
         let result = EnumPrintersW(
             PRINTER_ENUM_NETWORK,
-            windows::core::PCWSTR(server_w.as_ptr()),
+            &server_w,
             1,
             Some(buf.as_mut_slice()),
-            needed,
             &mut needed,
             &mut returned,
         );
@@ -116,24 +115,21 @@ fn enum_printers_network(server_unc: &str) -> Result<Vec<PrinterItem>, String> {
 
 /// 解析 PRINTER_INFO_1W 为 PrinterItem
 fn parse_printer_info1(info: &PRINTER_INFO_1W) -> Option<PrinterItem> {
-    let name = wide_ptr_to_string(info.pName);
+    let name = wide_ptr_to_string(info.pName.0);
     if name.is_empty() {
         return None;
     }
 
     // pName 可能是 \\server\share 或纯共享名
-    let share_name = name
-        .rsplit('\\')
-        .next()
-        .unwrap_or(&name)
-        .to_string();
+    let share_name = name.rsplit('\\').next().unwrap_or(&name).to_string();
     let share_path = if name.starts_with("\\\\") {
         name.clone()
     } else {
         format!("\\\\{SERVER_ADDR}\\{name}")
     };
 
-    let driver_name = get_remote_driver_info(&share_path).unwrap_or_else(|| "连接后自动识别".to_string());
+    let driver_name =
+        get_remote_driver_info(&share_path).unwrap_or_else(|| "连接后自动识别".to_string());
 
     Some(PrinterItem {
         name: share_name,
@@ -148,22 +144,22 @@ fn enum_wnet_printers(server_unc: &str) -> Result<Vec<PrinterItem>, String> {
     let server_w = HSTRING::from(server_unc);
     unsafe {
         let net_resource = NETRESOURCEW {
-            dwScope: 0,
+            dwScope: NET_RESOURCE_SCOPE(0),
             dwType: RESOURCETYPE_PRINT,
             dwDisplayType: 0,
-            dwUsage: 0,
-            lpLocalName: windows::core::PWSTR::null(),
-            lpRemoteName: windows::core::PWSTR(server_w.as_ptr() as *mut u16),
-            lpComment: windows::core::PWSTR::null(),
-            lpProvider: windows::core::PWSTR::null(),
+            dwUsage: RESOURCEUSAGE_CONTAINER.0,
+            lpLocalName: PWSTR::null(),
+            lpRemoteName: PWSTR(server_w.as_ptr() as *mut u16),
+            lpComment: PWSTR::null(),
+            lpProvider: PWSTR::null(),
         };
 
-        let mut handle = windows::Win32::Foundation::HANDLE::default();
+        let mut handle = HANDLE(std::ptr::null_mut());
         let result = WNetOpenEnumW(
-            RESOURCE_CONNECTED,
+            RESOURCE_GLOBALNET,
             RESOURCETYPE_PRINT,
             RESOURCEUSAGE_ALL,
-            Some(&net_resource),
+            Some(&net_resource as *const NETRESOURCEW),
             &mut handle,
         );
         if result != NO_ERROR {
@@ -181,14 +177,24 @@ fn enum_wnet_printers(server_unc: &str) -> Result<Vec<PrinterItem>, String> {
             let mut count: u32 = u32::MAX;
             let mut buf_size: u32 = buf.len() as u32;
 
-            let result = WNetEnumResourceW(handle, &mut count, Some(buf.as_mut_slice()), &mut buf_size);
+            let result = WNetEnumResourceW(
+                handle,
+                &mut count,
+                buf.as_mut_ptr() as *mut core::ffi::c_void,
+                &mut buf_size,
+            );
 
             if result == ERROR_NO_MORE_ITEMS {
                 break;
             }
-            if result == ERROR_MORE_DATA || result == ERROR_INSUFFICIENT_BUFFER {
-                buf.resize(buf_size as usize, 0);
-                continue;
+            if result.0 == ERROR_INSUFFICIENT_BUFFER.0 || result.0 == ERROR_MORE_DATA.0 {
+                if buf_size > buf.len() as u32 {
+                    buf.resize(buf_size as usize, 0);
+                    continue;
+                }
+                // 缓冲区无法扩大，避免无限循环
+                let _ = WNetCloseEnum(handle);
+                return Err("打印机枚举缓冲区分配异常".to_string());
             }
             if result != NO_ERROR {
                 let _ = WNetCloseEnum(handle);
@@ -212,8 +218,8 @@ fn enum_wnet_printers(server_unc: &str) -> Result<Vec<PrinterItem>, String> {
                     .next()
                     .unwrap_or(&remote_name)
                     .to_string();
-                let driver_name =
-                    get_remote_driver_info(&remote_name).unwrap_or_else(|| "连接后自动识别".to_string());
+                let driver_name = get_remote_driver_info(&remote_name)
+                    .unwrap_or_else(|| "连接后自动识别".to_string());
                 printers.push(PrinterItem {
                     name: share_name,
                     share_path: remote_name,
@@ -233,26 +239,20 @@ fn enum_wnet_printers(server_unc: &str) -> Result<Vec<PrinterItem>, String> {
 fn get_remote_driver_info(share_path: &str) -> Option<String> {
     let path_w = HSTRING::from(share_path);
     unsafe {
-        let mut handle = windows::Win32::Graphics::Printing::HANDLE(std::ptr::null_mut());
-        if OpenPrinterW(
-            windows::core::PWSTR(path_w.as_ptr() as *mut u16),
-            &mut handle,
-            None,
-        )
-        .is_err()
-        {
+        let mut handle = HANDLE(std::ptr::null_mut());
+        if OpenPrinterW(&path_w, &mut handle, None).is_err() {
             return None;
         }
 
         let mut needed: u32 = 0;
-        let _ = GetPrinterW(handle, 2, None, 0, &mut needed);
+        let _ = GetPrinterW(handle, 2, None, &mut needed);
         if needed == 0 {
             let _ = ClosePrinter(handle);
             return None;
         }
 
         let mut buf: Vec<u8> = vec![0; needed as usize];
-        let result = GetPrinterW(handle, 2, Some(buf.as_mut_slice()), needed, &mut needed);
+        let result = GetPrinterW(handle, 2, Some(buf.as_mut_slice()), &mut needed);
         let _ = ClosePrinter(handle);
 
         if result.is_err() {
@@ -260,7 +260,7 @@ fn get_remote_driver_info(share_path: &str) -> Option<String> {
         }
 
         let info = &*(buf.as_ptr() as *const PRINTER_INFO_2W);
-        let driver = wide_ptr_to_string(info.pDriverName);
+        let driver = wide_ptr_to_string(info.pDriverName.0);
         if driver.is_empty() {
             None
         } else {
@@ -288,7 +288,6 @@ mod tests {
 
     #[test]
     fn test_share_name_extraction() {
-        // 模拟从完整路径提取共享名
         let full_path = "\\\\10.60.254.90\\HP-LaserJet";
         let share_name = full_path.rsplit('\\').next().unwrap();
         assert_eq!(share_name, "HP-LaserJet");
@@ -311,9 +310,8 @@ mod tests {
 
     #[test]
     fn test_scan_fails_gracefully_when_offline() {
-        // 服务器不可达时应返回友好中文错误
+        // 服务器不可达时应返回友好中文错误而非 panic
         let result = scan_server_printers();
-        // 在开发环境中服务器大概率不可达，应返回错误而非 panic
         if let Err(e) = result {
             assert!(!e.is_empty());
         }

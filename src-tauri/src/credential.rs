@@ -1,10 +1,10 @@
 //! Windows 系统凭据自动创建模块
 //! 程序启动时静默写入打印服务器 SMB 凭据，存在则覆盖，不存在则新建
 
-use windows::core::{HSTRING, PCWSTR};
+use windows::core::{HSTRING, PCWSTR, PWSTR};
 use windows::Win32::Foundation::{GetLastError, ERROR_NOT_FOUND};
 use windows::Win32::Security::Credentials::{
-    CredDeleteW, CredFree, CredReadW, CredWriteW, CREDENTIALW, CREDENTIAL_ATTRIBUTEW,
+    CredDeleteW, CredFree, CredReadW, CredWriteW, CREDENTIALW, CREDENTIAL_ATTRIBUTEW, CRED_FLAGS,
     CRED_PERSIST_LOCAL_MACHINE, CRED_TYPE_DOMAIN_PASSWORD,
 };
 
@@ -28,18 +28,18 @@ pub fn write_credential(target: &str, username: &str, password: &str) -> Result<
     let password_bytes: Vec<u8> = password.encode_utf16().flat_map(|c| c.to_le_bytes()).collect();
 
     let cred = CREDENTIALW {
-        Flags: 0,
+        Flags: CRED_FLAGS(0),
         Type: CRED_TYPE_DOMAIN_PASSWORD,
-        TargetName: PCWSTR(target_w.as_ptr()),
-        Comment: PCWSTR::null(),
+        TargetName: PWSTR(target_w.as_ptr() as *mut u16),
+        Comment: PWSTR::null(),
         LastWritten: Default::default(),
         CredentialBlobSize: password_bytes.len() as u32,
         CredentialBlob: password_bytes.as_ptr() as *mut u8,
         Persist: CRED_PERSIST_LOCAL_MACHINE,
         AttributeCount: 0,
         Attributes: std::ptr::null_mut::<CREDENTIAL_ATTRIBUTEW>(),
-        TargetAlias: PCWSTR::null(),
-        UserName: PCWSTR(username_w.as_ptr()),
+        TargetAlias: PWSTR::null(),
+        UserName: PWSTR(username_w.as_ptr() as *mut u16),
     };
 
     unsafe {
@@ -55,6 +55,7 @@ pub fn write_credential(target: &str, username: &str, password: &str) -> Result<
 }
 
 /// 读取凭据并返回用户名（用于验证凭据是否正确写入）
+#[allow(dead_code)]
 pub fn read_credential_username(target: &str) -> Result<String, String> {
     let target_w = HSTRING::from(target);
     unsafe {
@@ -88,9 +89,10 @@ pub fn read_credential_username(target: &str) -> Result<String, String> {
 pub fn delete_credential(target: &str) -> Result<(), String> {
     let target_w = HSTRING::from(target);
     unsafe {
-        CredDeleteW(PCWSTR(target_w.as_ptr()), CRED_TYPE_DOMAIN_PASSWORD, 0)
-            .ok()
-            .map_err(|e| win_error_message("凭据删除", e.0))
+        match CredDeleteW(PCWSTR(target_w.as_ptr()), CRED_TYPE_DOMAIN_PASSWORD, 0) {
+            Ok(()) => Ok(()),
+            Err(_) => Err(win_error_message("凭据删除", GetLastError().0)),
+        }
     }
 }
 

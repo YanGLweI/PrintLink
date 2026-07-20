@@ -5,14 +5,13 @@ use serde::Serialize;
 use windows::core::{HSTRING, PCWSTR, PWSTR};
 use windows::Win32::Foundation::{GetLastError, HANDLE};
 use windows::Win32::Graphics::Printing::{
-    AddPrinterConnectionW, ClosePrinter, DeletePrinter, EnumPrintersW, GetPrinterW,
+    AddPrinterConnectionW, ClosePrinter, DeletePrinter, EnumPrintersW, GetDefaultPrinterW,
     OpenPrinterW, SetDefaultPrinterW, PRINTER_ENUM_CONNECTIONS, PRINTER_INFO_2W,
 };
 use windows::Win32::UI::Shell::ShellExecuteW;
 use windows::Win32::UI::WindowsAndMessaging::SW_SHOW;
 
 use crate::credential::wide_ptr_to_string;
-use crate::smb_scan::PrinterItem;
 use crate::utils::{win_error_message, SERVER_ADDR};
 
 /// 本地已连接打印机信息
@@ -40,26 +39,23 @@ pub async fn connect_printer(printer_path: String) -> Result<String, String> {
 
     let path_w = HSTRING::from(&printer_path);
     unsafe {
-        match AddPrinterConnectionW(PCWSTR(path_w.as_ptr())) {
-            Ok(()) => {
-                log::info!("打印机连接成功: {printer_path}");
-                Ok(format!("打印机连接成功：{printer_path}"))
-            }
-            Err(_) => {
-                let code = GetLastError().0;
-                log::error!("打印机连接失败: {printer_path}, 错误码={code}");
-                Err(match code {
-                    1797 | 1930 => {
-                        "打印机驱动缺失，请先手动安装对应驱动后重试".to_string()
-                    }
-                    1802 => "该打印机已安装，无需重复连接".to_string(),
-                    1326 => "凭据验证失败，请重启程序重试".to_string(),
-                    53 | 1203 => {
-                        format!("打印服务器 {SERVER_ADDR} 网络不通，请检查内网连接")
-                    }
-                    _ => win_error_message("打印机连接", code),
-                })
-            }
+        if AddPrinterConnectionW(PCWSTR(path_w.as_ptr())).as_bool() {
+            log::info!("打印机连接成功: {printer_path}");
+            Ok(format!("打印机连接成功：{printer_path}"))
+        } else {
+            let code = GetLastError().0;
+            log::error!("打印机连接失败: {printer_path}, 错误码={code}");
+            Err(match code {
+                1797 | 1930 => {
+                    "打印机驱动缺失，请先手动安装对应驱动后重试".to_string()
+                }
+                1802 => "该打印机已安装，无需重复连接".to_string(),
+                1326 => "凭据验证失败，请重启程序重试".to_string(),
+                53 | 1203 => {
+                    format!("打印服务器 {SERVER_ADDR} 网络不通，请检查内网连接")
+                }
+                _ => win_error_message("打印机连接", code),
+            })
         }
     }
 }
@@ -80,7 +76,6 @@ pub async fn get_local_printer_list() -> Result<Vec<LocalPrinterItem>, String> {
             PCWSTR::null(),
             2,
             None,
-            0,
             &mut needed,
             &mut returned,
         );
@@ -95,7 +90,6 @@ pub async fn get_local_printer_list() -> Result<Vec<LocalPrinterItem>, String> {
             PCWSTR::null(),
             2,
             Some(buf.as_mut_slice()),
-            needed,
             &mut needed,
             &mut returned,
         );
@@ -115,13 +109,13 @@ pub async fn get_local_printer_list() -> Result<Vec<LocalPrinterItem>, String> {
 
         let server_prefix_lower = format!("\\\\{SERVER_ADDR}").to_lowercase();
         for info in infos {
-            let name = wide_ptr_to_string(info.pPrinterName);
+            let name = wide_ptr_to_string(info.pPrinterName.0);
             // 仅保留目标打印服务器的打印机
             if !name.to_lowercase().starts_with(&server_prefix_lower) {
                 continue;
             }
-            let port_name = wide_ptr_to_string(info.pPortName);
-            let driver_name = wide_ptr_to_string(info.pDriverName);
+            let port_name = wide_ptr_to_string(info.pPortName.0);
+            let driver_name = wide_ptr_to_string(info.pDriverName.0);
             items.push(LocalPrinterItem {
                 is_default: name == default_printer,
                 name,
@@ -141,16 +135,13 @@ pub async fn get_local_printer_list() -> Result<Vec<LocalPrinterItem>, String> {
 pub async fn set_default_printer(name: String) -> Result<String, String> {
     let name_w = HSTRING::from(&name);
     unsafe {
-        match SetDefaultPrinterW(PCWSTR(name_w.as_ptr())) {
-            Ok(()) => {
-                log::info!("已设为默认打印机: {name}");
-                Ok(format!("已将「{}」设为默认打印机", display_name(&name)))
-            }
-            Err(_) => {
-                let code = GetLastError().0;
-                log::error!("设置默认打印机失败: {name}, 错误码={code}");
-                Err(win_error_message("设置默认打印机", code))
-            }
+        if SetDefaultPrinterW(PCWSTR(name_w.as_ptr())).as_bool() {
+            log::info!("已设为默认打印机: {name}");
+            Ok(format!("已将「{}」设为默认打印机", display_name(&name)))
+        } else {
+            let code = GetLastError().0;
+            log::error!("设置默认打印机失败: {name}, 错误码={code}");
+            Err(win_error_message("设置默认打印机", code))
         }
     }
 }
@@ -161,16 +152,16 @@ pub async fn remove_printer(name: String) -> Result<String, String> {
     let name_w = HSTRING::from(&name);
     unsafe {
         let mut handle = HANDLE(std::ptr::null_mut());
-        if let Err(_) = OpenPrinterW(
-            PWSTR(name_w.as_ptr() as *mut u16),
+        if OpenPrinterW(
+            PCWSTR(name_w.as_ptr()),
             &mut handle,
             None,
-        ) {
+        ).is_err() {
             let code = GetLastError().0;
             return Err(win_error_message("打开打印机", code));
         }
 
-        if let Err(_) = DeletePrinter(handle) {
+        if DeletePrinter(handle).is_err() {
             let code = GetLastError().0;
             let _ = ClosePrinter(handle);
             return Err(win_error_message("删除打印机", code));
@@ -236,7 +227,6 @@ fn is_printer_connected(printer_path: &str) -> bool {
             PCWSTR::null(),
             2,
             None,
-            0,
             &mut needed,
             &mut returned,
         );
@@ -249,7 +239,6 @@ fn is_printer_connected(printer_path: &str) -> bool {
             PCWSTR::null(),
             2,
             Some(buf.as_mut_slice()),
-            needed,
             &mut needed,
             &mut returned,
         )
@@ -264,7 +253,7 @@ fn is_printer_connected(printer_path: &str) -> bool {
         );
         let target_lower = printer_path.to_lowercase();
         infos.iter().any(|info| {
-            wide_ptr_to_string(info.pPrinterName).to_lowercase() == target_lower
+            wide_ptr_to_string(info.pPrinterName.0).to_lowercase() == target_lower
         })
     }
 }
@@ -274,11 +263,7 @@ fn get_default_printer_name() -> Option<String> {
     unsafe {
         let mut buf: Vec<u16> = vec![0; 512];
         let mut size = buf.len() as u32;
-        let name_ptr = windows::Win32::Graphics::Printing::GetDefaultPrinterW(
-            windows::core::PWSTR(buf.as_mut_ptr()),
-            &mut size,
-        );
-        if name_ptr.is_ok() {
+        if GetDefaultPrinterW(PWSTR(buf.as_mut_ptr()), &mut size).as_bool() {
             let len = buf.iter().position(|&c| c == 0).unwrap_or(buf.len());
             Some(String::from_utf16_lossy(&buf[..len]))
         } else {
@@ -293,6 +278,7 @@ fn display_name(name: &str) -> String {
 }
 
 /// 拼接完整 SMB 打印机路径
+#[allow(dead_code)]
 pub fn build_printer_path(server: &str, share_name: &str) -> String {
     if share_name.starts_with("\\\\") {
         share_name.to_string()
@@ -302,6 +288,7 @@ pub fn build_printer_path(server: &str, share_name: &str) -> String {
 }
 
 /// 过滤本地打印机列表，仅保留目标服务器的设备
+#[allow(dead_code)]
 pub fn filter_server_printers(
     all_names: &[String],
     server: &str,
