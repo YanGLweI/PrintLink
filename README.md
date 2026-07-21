@@ -163,7 +163,7 @@ npm install
 
 ```powershell
 # 在 PowerShell 中执行（dot-source 方式，使环境变量生效于当前会话）
-. .\build-env.ps1
+.\build-env.ps1
 ```
 
 > 脚本会自动定位 `vcvars64.bat` 并将其导出的环境变量注入当前会话。若 Build Tools 安装路径不同，请修改脚本首行 `$vcvars` 变量。
@@ -172,7 +172,7 @@ npm install
 
 ```powershell
 # 确保已加载 MSVC 环境
-. .\build-env.ps1
+.\build-env.ps1
 
 # 启动 Tauri 开发模式（前端热重载 + Rust 自动重编译）
 npm run tauri dev
@@ -183,7 +183,7 @@ npm run tauri dev
 ### 5. 构建发布版
 
 ```powershell
-. .\build-env.ps1
+.\build-env.ps1
 npm run tauri build
 ```
 
@@ -267,7 +267,7 @@ pub const CRED_PASSWORD: &str = "a*999999";     // 凭据密码
 项目内置 17 个 Rust 单元测试，覆盖凭据、扫描、过滤、日志、网络等核心逻辑：
 
 ```powershell
-. .\build-env.ps1
+.\build-env.ps1
 cd src-tauri
 cargo test
 ```
