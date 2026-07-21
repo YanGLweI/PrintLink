@@ -1,6 +1,7 @@
 //! PrintLink - 共享打印机自动连接客户端
 //! 模块导出 + Tauri 指令注册 + 窗口关闭拦截（最小化到托盘）
 
+mod config;
 mod credential;
 mod printer_api;
 mod smb_scan;
@@ -30,6 +31,9 @@ pub fn run() {
             }
         })
         .invoke_handler(tauri::generate_handler![
+            config::get_config,
+            config::save_config_command,
+            config::reset_config,
             credential::init_print_credential,
             smb_scan::get_server_printer_list,
             printer_api::connect_printer,

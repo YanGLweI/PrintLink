@@ -7,7 +7,8 @@ import { ElMessage, ElMessageBox } from "element-plus";
 import StatusBar from "./components/StatusBar.vue";
 import AvailablePrinters from "./components/AvailablePrinters.vue";
 import ConnectedPrinters from "./components/ConnectedPrinters.vue";
-import type { PrinterItem, LocalPrinterItem, StatusState } from "./types/printer";
+import SettingsDialog from "./components/SettingsDialog.vue";
+import type { PrinterItem, LocalPrinterItem, StatusState, AppConfig } from "./types/printer";
 
 // ===== 状态 =====
 const credentialStatus = ref<StatusState>("checking");
@@ -20,6 +21,9 @@ const loadingConnected = ref(false);
 const connectingPaths = ref<string[]>([]);
 const activeTab = ref("available");
 const logMessage = ref("正在初始化...");
+// 设置弹窗
+const showSettings = ref(false);
+const serverAddr = ref("10.60.254.90");
 
 let unlistenRefresh: UnlistenFn | null = null;
 
@@ -36,6 +40,13 @@ async function openGitHub() {
     ElMessage.error("无法打开 GitHub 主页");
     setLog(String(e));
   }
+}
+
+// ===== 设置保存成功回调 =====
+async function handleSettingsSaved(config: AppConfig) {
+  serverAddr.value = config.server_addr;
+  setLog("配置已更新，正在重新初始化...");
+  await initApp();
 }
 
 // ===== 初始化 =====
@@ -178,6 +189,14 @@ async function handleOpenPreference(printer: LocalPrinterItem) {
 
 // ===== 生命周期 =====
 onMounted(async () => {
+  // 加载配置获取服务器地址
+  try {
+    const config = await invoke<AppConfig>("get_config");
+    serverAddr.value = config.server_addr;
+  } catch {
+    // 配置加载失败使用默认值
+  }
+
   // 监听托盘刷新事件
   unlistenRefresh = await listen("tray-refresh", () => {
     refreshAvailable();
@@ -205,7 +224,18 @@ onUnmounted(() => {
           <span>共享打印机管理客户端</span>
         </div>
       </div>
-      <StatusBar :credential-status="credentialStatus" :server-status="serverStatus" />
+      <div class="header-actions">
+        <el-tooltip content="设置" placement="bottom">
+          <button class="settings-btn" @click="showSettings = true">
+            <el-icon :size="18"><Setting /></el-icon>
+          </button>
+        </el-tooltip>
+        <StatusBar
+          :credential-status="credentialStatus"
+          :server-status="serverStatus"
+          :server-addr="serverAddr"
+        />
+      </div>
     </header>
 
     <!-- 主体标签页 -->
@@ -223,6 +253,7 @@ onUnmounted(() => {
             :loading="loadingAvailable"
             :connected-names="connectedPrinters.map((p) => p.name.toLowerCase())"
             :connecting-paths="connectingPaths"
+            :server-addr="serverAddr"
             @refresh="refreshAvailable"
             @connect="handleConnect"
           />
@@ -261,6 +292,12 @@ onUnmounted(() => {
       <span class="footer-log">{{ logMessage }}</span>
       <a class="footer-credit" @click="openGitHub">Developed by Yeunglw</a>
     </footer>
+
+    <!-- 设置弹窗 -->
+    <SettingsDialog
+      v-model:visible="showSettings"
+      @saved="handleSettingsSaved"
+    />
   </div>
 </template>
 
@@ -320,6 +357,39 @@ body,
   display: flex;
   align-items: center;
   gap: 12px;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.settings-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.82);
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+.settings-btn:hover {
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+}
+
+.settings-btn:hover .el-icon {
+  transform: rotate(45deg);
+}
+
+.settings-btn .el-icon {
+  transition: transform 0.3s ease;
 }
 
 .brand-icon {

@@ -6,8 +6,6 @@ use std::time::Duration;
 
 use simplelog::{CombinedLogger, Config, LevelFilter, WriteLogger};
 
-/// 打印服务器地址
-pub const SERVER_ADDR: &str = "10.60.254.90";
 /// SMB 服务端口
 pub const SMB_PORT: u16 = 445;
 /// 网络探测超时（秒）
@@ -48,20 +46,20 @@ pub fn get_log_dir() -> PathBuf {
 }
 
 /// 检测打印服务器 SMB 端口是否可达（3 秒超时）
-pub fn check_server_online() -> Result<(), String> {
-    let addr = format!("{SERVER_ADDR}:{SMB_PORT}");
+pub fn check_server_online(server_addr: &str) -> Result<(), String> {
+    let addr = format!("{server_addr}:{SMB_PORT}");
     match TcpStream::connect_timeout(
         &addr.parse().map_err(|_| format!("地址解析失败: {addr}"))?,
         Duration::from_secs(NETWORK_TIMEOUT_SECS),
     ) {
         Ok(_) => {
-            log::info!("服务器 {SERVER_ADDR} SMB 端口可达");
+            log::info!("服务器 {server_addr} SMB 端口可达");
             Ok(())
         }
         Err(e) => {
-            log::warn!("服务器 {SERVER_ADDR} 网络不通: {e}");
+            log::warn!("服务器 {server_addr} 网络不通: {e}");
             Err(format!(
-                "打印服务器 {SERVER_ADDR} 网络不通，请检查内网连接"
+                "打印服务器 {server_addr} 网络不通，请检查内网连接"
             ))
         }
     }
@@ -130,8 +128,9 @@ mod tests {
 
     #[test]
     fn test_server_addr_format() {
-        assert_eq!(SERVER_ADDR, "10.60.254.90");
-        let addr = format!("{SERVER_ADDR}:{SMB_PORT}");
+        use crate::config::DEFAULT_SERVER_ADDR;
+        assert_eq!(DEFAULT_SERVER_ADDR, "10.60.254.90");
+        let addr = format!("{DEFAULT_SERVER_ADDR}:{SMB_PORT}");
         assert!(addr.parse::<std::net::SocketAddr>().is_ok());
     }
 }

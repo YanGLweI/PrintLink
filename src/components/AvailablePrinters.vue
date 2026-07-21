@@ -7,6 +7,8 @@ const props = defineProps<{
   connectedNames: string[];
   /** 正在连接中的打印机共享路径（由父组件根据真实连接进度维护） */
   connectingPaths: string[];
+  /** 当前配置的打印服务器地址 */
+  serverAddr: string;
 }>();
 
 const emit = defineEmits<{
@@ -33,7 +35,7 @@ function isConnected(printer: PrinterItem): boolean {
   <div class="panel">
     <div class="panel-toolbar">
       <span class="panel-hint">
-        打印服务器 <b>\\10.60.254.90</b> 下的共享打印机，点击「连接」一键安装
+        打印服务器 <b>\\{{ serverAddr }}</b> 下的共享打印机，点击「连接」一键安装
       </span>
       <el-button
         type="primary"

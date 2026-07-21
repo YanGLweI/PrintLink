@@ -26,3 +26,13 @@ export interface LocalPrinterItem {
 
 /** 状态指示 */
 export type StatusState = 'ok' | 'error' | 'checking'
+
+/** 应用配置（打印服务器连接信息） */
+export interface AppConfig {
+  /** 打印服务器地址（IP 或主机名） */
+  server_addr: string
+  /** SMB 凭据账号 */
+  username: string
+  /** SMB 凭据密码 */
+  password: string
+}

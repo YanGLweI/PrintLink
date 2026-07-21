@@ -8,17 +8,14 @@ use windows::Win32::Security::Credentials::{
     CRED_PERSIST_LOCAL_MACHINE, CRED_TYPE_DOMAIN_PASSWORD,
 };
 
-use crate::utils::{win_error_message, SERVER_ADDR};
-
-/// 凭据用户名
-pub const CRED_USERNAME: &str = "print";
-/// 凭据密码
-pub const CRED_PASSWORD: &str = "a*999999";
+use crate::config;
+use crate::utils::win_error_message;
 
 /// Tauri 指令：自动创建/更新打印服务器凭据
 #[tauri::command]
 pub async fn init_print_credential() -> Result<String, String> {
-    write_credential(SERVER_ADDR, CRED_USERNAME, CRED_PASSWORD)
+    let cfg = config::load_config();
+    write_credential(&cfg.server_addr, &cfg.username, &cfg.password)
 }
 
 /// 写入 Windows 网络凭据（幂等：存在则覆盖更新）

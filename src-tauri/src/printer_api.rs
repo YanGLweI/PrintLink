@@ -11,8 +11,9 @@ use windows::Win32::Graphics::Printing::{
 use windows::Win32::UI::Shell::ShellExecuteW;
 use windows::Win32::UI::WindowsAndMessaging::SW_SHOW;
 
+use crate::config;
 use crate::credential::wide_ptr_to_string;
-use crate::utils::{win_error_message, SERVER_ADDR};
+use crate::utils::win_error_message;
 
 /// 本地已连接打印机信息
 #[derive(Debug, Clone, Serialize)]
@@ -37,6 +38,7 @@ pub async fn connect_printer(printer_path: String) -> Result<String, String> {
         return Err("该打印机已安装，无需重复连接".to_string());
     }
 
+    let cfg = config::load_config();
     let path_w = HSTRING::from(&printer_path);
     unsafe {
         if AddPrinterConnectionW(PCWSTR(path_w.as_ptr())).as_bool() {
@@ -52,7 +54,7 @@ pub async fn connect_printer(printer_path: String) -> Result<String, String> {
                 1802 => "该打印机已安装，无需重复连接".to_string(),
                 1326 => "凭据验证失败，请重启程序重试".to_string(),
                 53 | 1203 => {
-                    format!("打印服务器 {SERVER_ADDR} 网络不通，请检查内网连接")
+                    format!("打印服务器 {} 网络不通，请检查内网连接", cfg.server_addr)
                 }
                 _ => win_error_message("打印机连接", code),
             })
@@ -63,6 +65,7 @@ pub async fn connect_printer(printer_path: String) -> Result<String, String> {
 /// Tauri 指令：获取本机已安装的打印服务器打印机
 #[tauri::command]
 pub async fn get_local_printer_list() -> Result<Vec<LocalPrinterItem>, String> {
+    let cfg = config::load_config();
     let default_printer = get_default_printer_name().unwrap_or_default();
     let mut items = Vec::new();
 
@@ -107,7 +110,7 @@ pub async fn get_local_printer_list() -> Result<Vec<LocalPrinterItem>, String> {
             returned as usize,
         );
 
-        let server_prefix_lower = format!("\\\\{SERVER_ADDR}").to_lowercase();
+        let server_prefix_lower = format!("\\\\{}", cfg.server_addr).to_lowercase();
         for info in infos {
             let name = wide_ptr_to_string(info.pPrinterName.0);
             // 仅保留目标打印服务器的打印机

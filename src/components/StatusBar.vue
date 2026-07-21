@@ -5,6 +5,7 @@ import type { StatusState } from "../types/printer";
 const props = defineProps<{
   credentialStatus: StatusState;
   serverStatus: StatusState;
+  serverAddr: string;
 }>();
 
 const credLabel = computed(() => {
@@ -21,7 +22,7 @@ const credLabel = computed(() => {
 const serverLabel = computed(() => {
   switch (props.serverStatus) {
     case "ok":
-      return "10.60.254.90 已连接";
+      return `${props.serverAddr} 已连接`;
     case "error":
       return "服务器离线";
     default:

@@ -16,8 +16,9 @@ use windows::Win32::NetworkManagement::WNet::{
     RESOURCE_GLOBALNET, RESOURCETYPE_PRINT, RESOURCEUSAGE_ALL, RESOURCEUSAGE_CONTAINER,
 };
 
+use crate::config;
 use crate::credential::wide_ptr_to_string;
-use crate::utils::{check_server_online, win_error_message, SERVER_ADDR};
+use crate::utils::{check_server_online, win_error_message};
 
 /// 可连接打印机信息
 #[derive(Debug, Clone, Serialize)]
@@ -40,23 +41,26 @@ pub async fn get_server_printer_list() -> Result<Vec<PrinterItem>, String> {
 
 /// 扫描打印服务器共享打印机（先检测网络，再枚举设备）
 pub fn scan_server_printers() -> Result<Vec<PrinterItem>, String> {
+    let cfg = config::load_config();
+    let server_addr = &cfg.server_addr;
+
     // 1. 网络可达性预检
-    check_server_online()?;
+    check_server_online(server_addr)?;
 
     // 2. 优先使用 EnumPrintersW 枚举，失败则回退 WNet 枚举
-    let server_unc = format!("\\\\{SERVER_ADDR}");
-    match enum_printers_network(&server_unc) {
+    let server_unc = format!("\\\\{server_addr}");
+    match enum_printers_network(&server_unc, server_addr) {
         Ok(items) if !items.is_empty() => Ok(items),
-        Ok(_) => enum_wnet_printers(&server_unc),
+        Ok(_) => enum_wnet_printers(&server_unc, server_addr),
         Err(e) => {
             log::warn!("EnumPrintersW 枚举失败: {e}，尝试 WNet 方式");
-            enum_wnet_printers(&server_unc)
+            enum_wnet_printers(&server_unc, server_addr)
         }
     }
 }
 
 /// 方式一：EnumPrintersW + PRINTER_ENUM_NETWORK 枚举远程共享打印机
-fn enum_printers_network(server_unc: &str) -> Result<Vec<PrinterItem>, String> {
+fn enum_printers_network(server_unc: &str, server_addr: &str) -> Result<Vec<PrinterItem>, String> {
     let server_w = HSTRING::from(server_unc);
     unsafe {
         let mut needed: u32 = 0;
@@ -104,7 +108,7 @@ fn enum_printers_network(server_unc: &str) -> Result<Vec<PrinterItem>, String> {
 
         let mut printers = Vec::new();
         for info in infos {
-            if let Some(item) = parse_printer_info1(info) {
+            if let Some(item) = parse_printer_info1(info, server_addr) {
                 printers.push(item);
             }
         }
@@ -114,7 +118,7 @@ fn enum_printers_network(server_unc: &str) -> Result<Vec<PrinterItem>, String> {
 }
 
 /// 解析 PRINTER_INFO_1W 为 PrinterItem
-fn parse_printer_info1(info: &PRINTER_INFO_1W) -> Option<PrinterItem> {
+fn parse_printer_info1(info: &PRINTER_INFO_1W, server_addr: &str) -> Option<PrinterItem> {
     let name = wide_ptr_to_string(info.pName.0);
     if name.is_empty() {
         return None;
@@ -125,7 +129,7 @@ fn parse_printer_info1(info: &PRINTER_INFO_1W) -> Option<PrinterItem> {
     let share_path = if name.starts_with("\\\\") {
         name.clone()
     } else {
-        format!("\\\\{SERVER_ADDR}\\{name}")
+        format!("\\\\{server_addr}\\{name}")
     };
 
     let driver_name =
@@ -140,7 +144,7 @@ fn parse_printer_info1(info: &PRINTER_INFO_1W) -> Option<PrinterItem> {
 }
 
 /// 方式二：WNet 网络资源枚举（回退方案）
-fn enum_wnet_printers(server_unc: &str) -> Result<Vec<PrinterItem>, String> {
+fn enum_wnet_printers(server_unc: &str, server_addr: &str) -> Result<Vec<PrinterItem>, String> {
     let server_w = HSTRING::from(server_unc);
     unsafe {
         let net_resource = NETRESOURCEW {
@@ -164,7 +168,7 @@ fn enum_wnet_printers(server_unc: &str) -> Result<Vec<PrinterItem>, String> {
         );
         if result != NO_ERROR {
             return Err(match result.0 {
-                53 | 1203 => format!("打印服务器 {SERVER_ADDR} 网络不通，请检查内网连接"),
+                53 | 1203 => format!("打印服务器 {server_addr} 网络不通，请检查内网连接"),
                 1326 => "凭据验证失败，请重启程序重试".to_string(),
                 _ => win_error_message("网络枚举", result.0),
             });
@@ -299,11 +303,12 @@ mod tests {
 
     #[test]
     fn test_share_path_construction() {
+        let server_addr = config::DEFAULT_SERVER_ADDR;
         let name = "Epson-L3150";
         let path = if name.starts_with("\\\\") {
             name.to_string()
         } else {
-            format!("\\\\{SERVER_ADDR}\\{name}")
+            format!("\\\\{server_addr}\\{name}")
         };
         assert_eq!(path, "\\\\10.60.254.90\\Epson-L3150");
     }
