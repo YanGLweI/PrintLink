@@ -12,6 +12,7 @@ const emit = defineEmits<{
   disconnect: [printer: LocalPrinterItem];
   "open-property": [printer: LocalPrinterItem];
   "open-preference": [printer: LocalPrinterItem];
+  "go-available": [];
 }>();
 
 function displayName(name: string): string {
@@ -38,12 +39,12 @@ function displayName(name: string): string {
     </div>
 
     <el-table
+      v-if="printers.length > 0"
       v-loading="loading"
       :data="printers"
       height="100%"
       stripe
       class="printer-table"
-      empty-text=" "
     >
       <el-table-column label="打印机名称" min-width="150">
         <template #default="{ row }">
@@ -108,13 +109,18 @@ function displayName(name: string): string {
         </template>
       </el-table-column>
 
-      <template #empty>
-        <el-empty
-          description="尚未连接任何共享打印机，请前往「可连接打印机」页面安装"
-          :image-size="90"
-        />
-      </template>
     </el-table>
+
+    <div v-else v-loading="loading" class="empty-state">
+      <el-empty description="尚未连接任何共享打印机" :image-size="110">
+        <el-button type="primary" @click="emit('go-available')">
+          <span class="button-content">
+            <el-icon><Monitor /></el-icon>
+            连接打印机
+          </span>
+        </el-button>
+      </el-empty>
+    </div>
   </div>
 </template>
 
@@ -147,6 +153,13 @@ function displayName(name: string): string {
   flex: 1;
   --el-table-border-color: #eef2f7;
   --el-table-header-bg-color: #f8fafc;
+}
+
+.empty-state {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .printer-name-cell {
@@ -186,5 +199,10 @@ function displayName(name: string): string {
 
 .action-group :deep(.el-button + .el-button) {
   margin-left: 0;
+}
+.button-content {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 </style>

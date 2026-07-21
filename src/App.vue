@@ -249,6 +249,7 @@ onUnmounted(() => {
             @disconnect="handleDisconnect"
             @open-property="handleOpenProperty"
             @open-preference="handleOpenPreference"
+            @go-available="activeTab = 'available'"
           />
         </el-tab-pane>
       </el-tabs>
