@@ -13,7 +13,7 @@
 ![Vue](https://img.shields.io/badge/Vue-3.5-4FC08D?logo=vuedotjs)
 ![Element Plus](https://img.shields.io/badge/Element%20Plus-2.14-409EFF)
 ![Platform](https://img.shields.io/badge/Platform-Windows%2010%2F11-0078D6?logo=windows)
-![License](https://img.shields.io/badge/License-MIT-green)
+[![License](https://img.shields.io/badge/License-MIT-green)](https://github.com/YanGLweI/PrintLink?tab=MIT-1-ov-file)
 
 </div>
 
