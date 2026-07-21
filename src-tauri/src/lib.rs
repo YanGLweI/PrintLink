@@ -6,6 +6,7 @@ use tauri::Manager;
 mod config;
 mod credential;
 mod printer_api;
+mod shared_drive;
 mod smb_scan;
 mod tray;
 mod utils;
@@ -50,6 +51,11 @@ pub fn run() {
             smb_scan::fetch_driver_info_async,
             smb_scan::get_printer_cache,
             smb_scan::save_printer_cache,
+            shared_drive::connect_shared_drive,
+            shared_drive::get_shared_drive_folders,
+            shared_drive::open_shared_folder,
+            shared_drive::disconnect_shared_drive,
+            shared_drive::get_shared_drive_config,
             printer_api::connect_printer,
             printer_api::get_local_printer_list,
             printer_api::set_default_printer,

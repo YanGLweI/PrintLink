@@ -8,6 +8,7 @@ import StatusBar from "./components/StatusBar.vue";
 import AvailablePrinters from "./components/AvailablePrinters.vue";
 import ConnectedPrinters from "./components/ConnectedPrinters.vue";
 import SettingsDialog from "./components/SettingsDialog.vue";
+import SharedDrive from "./components/SharedDrive.vue";
 import type { PrinterItem, LocalPrinterItem, StatusState, AppConfig, DriverInfoUpdate } from "./types/printer";
 
 // ===== 状态 =====
@@ -317,6 +318,16 @@ onUnmounted(() => {
             @open-preference="handleOpenPreference"
             @go-available="activeTab = 'available'"
           />
+        </el-tab-pane>
+
+        <el-tab-pane name="shared-drive">
+          <template #label>
+            <span class="tab-label">
+              <el-icon><FolderOpened /></el-icon>
+              扫描共享盘
+            </span>
+          </template>
+          <SharedDrive />
         </el-tab-pane>
       </el-tabs>
     </main>

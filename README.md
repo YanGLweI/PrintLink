@@ -47,7 +47,7 @@ PrintLink 将这一切自动化：**启动即就绪**。程序启动时静默写
 
 ### [⬇️ 下载最新版本（GitHub Releases）](https://github.com/YanGLweI/PrintLink/releases/latest)
 
-当前版本 **v1.0.1** · 安装包仅 ~3.8 MB · Windows 10/11 x64
+当前版本 **v2.1.0** · 安装包仅 ~3.8 MB · Windows 10/11 x64
 
 </div>
 
@@ -66,7 +66,9 @@ PrintLink 将这一切自动化：**启动即就绪**。程序启动时静默写
 - **🔐 凭据自动写入** — 启动时静默写入打印服务器 SMB 凭据（`10.60.254.90 / print`），存在则覆盖、不存在则新建，幂等安全
 - **🔍 共享打印机扫描** — 自动枚举打印服务器下所有共享打印机，双引擎探测（`EnumPrintersW` + `WNet` 回退），并预检 TCP 445 端口连通性
 - **⚡ 一键连接安装** — 点击「连接」即可安装网络打印机，自动拦截重复连接，驱动缺失时给出中文提示
-- **📑 双 Tab 管理** — 「可连接打印机」与「已连接打印机」分页管理，状态一目了然
+- **📑 三 Tab 管理** — 「可连接打印机」「已连接打印机」「扫描共享盘」分页管理，状态一目了然
+- **📂 共享盘连接** — 输入 SMB 服务器地址/账号/密码即可连接共享盘，浏览根文件夹，点击直接调起资源管理器；凭据持久化，后续启动自动连接
+- **⚙️ 设置外部化** — 服务器地址、凭据等参数可通过设置对话框修改，保存至 `%APPDATA%/PrintLink/config.json`，无需重新编译
 - **🛠️ 设备全生命周期操作** — 已连接设备支持：打开属性、打开首选项、设为默认打印机、断开连接
 - **🗂️ 系统托盘驻留** — 关闭窗口时最小化到任务栏右下角通知区域（类似微信），后台常驻；托盘菜单支持显示窗口 / 刷新列表 / 退出
 - **📝 全局日志** — 所有操作与异常写入 `%APPDATA%/PrintLink/logs/`，便于排查
@@ -124,7 +126,8 @@ PrintLink 将这一切自动化：**启动即就绪**。程序启动时静默写
 | `AddPrinterConnectionW` | 连接网络打印机 |
 | `SetDefaultPrinterW` / `GetDefaultPrinterW` | 设置 / 读取默认打印机 |
 | `OpenPrinterW` + `DeletePrinter` | 断开（删除）打印机 |
-| `WNetOpenEnumW` / `WNetEnumResourceW` | 网络资源枚举（回退方案） |
+| `WNetAddConnection2W` / `WNetCancelConnection2W` | SMB 共享盘连接 / 断开 |
+| `WNetOpenEnumW` / `WNetEnumResourceW` | 网络共享资源枚举 |
 | `ShellExecuteW` | 调起 `rundll32 printui.dll` 打开属性 / 首选项 |
 
 ---
@@ -190,7 +193,7 @@ npm run tauri build
 产物位于：
 
 ```
-src-tauri/target/release/bundle/nsis/PrintLink_1.0.0_x64-setup.exe   # NSIS 安装程序
+src-tauri/target/release/bundle/nsis/PrintLink_2.1.0_x64-setup.exe   # NSIS 安装程序
 src-tauri/target/release/printlink.exe                                # 独立可执行文件
 ```
 
@@ -203,10 +206,12 @@ PrintLink/
 ├── src-tauri/                          # Rust 后端
 │   ├── src/
 │   │   ├── main.rs                     # 程序入口（release 隐藏控制台）
-│   │   ├── lib.rs                      # 模块导出 + 9 个指令注册 + 关闭拦截
+│   │   ├── lib.rs                      # 模块导出 + 指令注册 + 关闭拦截
+│   │   ├── config.rs                   # 应用配置外部化（config.json 读写）
 │   │   ├── credential.rs               # 凭据管理（CredWriteW，含单元测试）
 │   │   ├── smb_scan.rs                 # SMB 共享打印机扫描（双引擎，含单元测试）
 │   │   ├── printer_api.rs              # 打印机连接/默认/断开/属性操作（含单元测试）
+│   │   ├── shared_drive.rs             # SMB 共享盘连接/枚举/断开（WNet API）
 │   │   ├── tray.rs                     # 系统托盘（菜单 + 单击恢复窗口）
 │   │   └── utils.rs                    # 日志初始化 + 网络探测 + 错误码翻译（含单元测试）
 │   ├── Cargo.toml                      # Rust 依赖与 windows crate features
@@ -219,7 +224,9 @@ PrintLink/
 │   ├── components/
 │   │   ├── StatusBar.vue               # 凭据 / 服务器状态指示灯
 │   │   ├── AvailablePrinters.vue       # 「可连接打印机」Tab
-│   │   └── ConnectedPrinters.vue       # 「已连接打印机」Tab
+│   │   ├── ConnectedPrinters.vue       # 「已连接打印机」Tab
+│   │   ├── SharedDrive.vue             # 「扫描共享盘」Tab（SMB 连接 + 文件夹浏览）
+│   │   └── SettingsDialog.vue          # 设置对话框（服务器/凭据配置）
 │   └── types/
 │       └── printer.ts                  # TS 类型定义
 ├── docs/
@@ -264,7 +271,7 @@ pub const CRED_PASSWORD: &str = "a*999999";     // 凭据密码
 
 ## 🧪 测试
 
-项目内置 17 个 Rust 单元测试，覆盖凭据、扫描、过滤、日志、网络等核心逻辑：
+项目内置 24 个 Rust 单元测试，覆盖凭据、扫描、过滤、日志、网络、共享盘等核心逻辑：
 
 ```powershell
 .\build-env.ps1
@@ -277,6 +284,8 @@ cargo test
 | `credential.rs` | 凭据写入 / 读回 / 幂等覆盖 / 不存在提示 |
 | `smb_scan.rs` | 序列化 / 共享名提取 / 路径拼接 / 离线优雅降级 |
 | `printer_api.rs` | 路径拼接 / 服务器前缀过滤 / 大小写不敏感 / 序列化 |
+| `shared_drive.rs` | 配置序列化 / 配置路径 / 隐藏共享过滤 |
+| `config.rs` | 默认配置 / 序列化 / 配置路径 |
 | `utils.rs` | 日志目录 / 网络超时 / 错误码翻译 / 地址格式 |
 
 **质量门禁**（全部通过）：
@@ -284,7 +293,7 @@ cargo test
 ```
 cargo check        → 0 error, 0 warning
 cargo clippy       → 0 warning
-cargo test         → 17 passed, 0 failed
+cargo test         → 24 passed, 0 failed
 npx vue-tsc --noEmit → 0 error
 npm run build      → 构建成功
 ```

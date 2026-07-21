@@ -1,6 +1,6 @@
 [package]
 name = "printlink"
-version = "2.0.0"
+version = "2.1.0"
 description = "PrintLink - 共享打印机自动连接客户端"
 authors = ["YLW"]
 edition = "2021"
