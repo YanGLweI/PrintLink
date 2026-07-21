@@ -47,7 +47,7 @@ PrintLink 将这一切自动化：**启动即就绪**。程序启动时静默写
 
 ### [⬇️ 下载最新版本（GitHub Releases）](https://github.com/YanGLweI/PrintLink/releases/latest)
 
-当前版本 **v1.0.0** · 安装包仅 ~3.8 MB · Windows 10/11 x64
+当前版本 **v1.0.1** · 安装包仅 ~3.8 MB · Windows 10/11 x64
 
 </div>
 
