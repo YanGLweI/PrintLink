@@ -5,8 +5,8 @@ use serde::Serialize;
 use windows::core::{HSTRING, PCWSTR, PWSTR};
 use windows::Win32::Foundation::{GetLastError, HANDLE};
 use windows::Win32::Graphics::Printing::{
-    AddPrinterConnectionW, ClosePrinter, DeletePrinter, EnumPrintersW, GetDefaultPrinterW,
-    OpenPrinterW, SetDefaultPrinterW, PRINTER_ENUM_CONNECTIONS, PRINTER_INFO_2W,
+    AddPrinterConnectionW, ClosePrinter, DeletePrinter, DeletePrinterConnectionW, EnumPrintersW,
+    GetDefaultPrinterW, OpenPrinterW, SetDefaultPrinterW, PRINTER_ENUM_CONNECTIONS, PRINTER_INFO_2W,
 };
 use windows::Win32::UI::Shell::ShellExecuteW;
 use windows::Win32::UI::WindowsAndMessaging::SW_SHOW;
@@ -151,25 +151,29 @@ pub async fn set_default_printer(name: String) -> Result<String, String> {
 pub async fn remove_printer(name: String) -> Result<String, String> {
     let name_w = HSTRING::from(&name);
     unsafe {
-        let mut handle = HANDLE(std::ptr::null_mut());
-        if OpenPrinterW(
-            PCWSTR(name_w.as_ptr()),
-            &mut handle,
-            None,
-        ).is_err() {
-            let code = GetLastError().0;
-            return Err(win_error_message("打开打印机", code));
+        // 首选：网络打印机连接专用断开 API（作用于当前用户连接，无需管理员权限）
+        if DeletePrinterConnectionW(PCWSTR(name_w.as_ptr())).as_bool() {
+            log::info!("打印机连接已断开: {name}");
+            return Ok(format!("已断开打印机：{}", display_name(&name)));
         }
+        let conn_code = GetLastError().0;
+        log::warn!("DeletePrinterConnectionW 失败（错误码={conn_code}），回退 DeletePrinter");
 
+        // 回退：打开并删除打印机对象（兼容本地打印机）
+        let mut handle = HANDLE(std::ptr::null_mut());
+        if OpenPrinterW(PCWSTR(name_w.as_ptr()), &mut handle, None).is_err() {
+            let code = GetLastError().0;
+            return Err(win_error_message("断开打印机", code));
+        }
         if DeletePrinter(handle).is_err() {
             let code = GetLastError().0;
             let _ = ClosePrinter(handle);
-            return Err(win_error_message("删除打印机", code));
+            return Err(win_error_message("断开打印机", code));
         }
         let _ = ClosePrinter(handle);
     }
 
-    log::info!("打印机已断开: {name}");
+    log::info!("打印机已删除: {name}");
     Ok(format!("已断开打印机：{}", display_name(&name)))
 }
 
