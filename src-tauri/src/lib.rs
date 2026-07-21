@@ -1,6 +1,8 @@
 //! PrintLink - 共享打印机自动连接客户端
 //! 模块导出 + Tauri 指令注册 + 窗口关闭拦截（最小化到托盘）
 
+use tauri::Manager;
+
 mod config;
 mod credential;
 mod printer_api;
@@ -14,6 +16,15 @@ pub fn run() {
     utils::init_logger();
 
     tauri::Builder::default()
+        // 单实例保护：第二次启动时聚焦已有窗口
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.show();
+                let _ = window.unminimize();
+                let _ = window.set_focus();
+            }
+            log::info!("检测到重复启动请求，已聚焦现有窗口");
+        }))
         // 注册 opener 插件（用于打开外部浏览器链接）
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
@@ -36,6 +47,9 @@ pub fn run() {
             config::reset_config,
             credential::init_print_credential,
             smb_scan::get_server_printer_list,
+            smb_scan::fetch_driver_info_async,
+            smb_scan::get_printer_cache,
+            smb_scan::save_printer_cache,
             printer_api::connect_printer,
             printer_api::get_local_printer_list,
             printer_api::set_default_printer,

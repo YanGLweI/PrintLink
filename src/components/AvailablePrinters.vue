@@ -70,7 +70,13 @@ function isConnected(printer: PrinterItem): boolean {
           <span class="mono">{{ row.share_path }}</span>
         </template>
       </el-table-column>
-      <el-table-column prop="driver_name" label="驱动名称" min-width="160" />
+      <el-table-column prop="driver_name" label="驱动名称" min-width="160">
+        <template #default="{ row }">
+          <span :class="{ 'driver-pending': row.driver_name === '连接后自动识别' }">
+            {{ row.driver_name }}
+          </span>
+        </template>
+      </el-table-column>
       <el-table-column prop="status" label="状态" width="80" align="center">
         <template #default="{ row }">
           <el-tag size="small" type="success" effect="light">{{ row.status }}</el-tag>
@@ -112,6 +118,7 @@ function isConnected(printer: PrinterItem): boolean {
 <style scoped>
 .panel {
   height: 100%;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   background: #fff;
@@ -163,5 +170,10 @@ function isConnected(printer: PrinterItem): boolean {
   font-family: "Consolas", "Courier New", monospace;
   font-size: 12.5px;
   color: #475569;
+}
+
+.driver-pending {
+  color: #999;
+  font-style: italic;
 }
 </style>

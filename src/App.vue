@@ -8,7 +8,7 @@ import StatusBar from "./components/StatusBar.vue";
 import AvailablePrinters from "./components/AvailablePrinters.vue";
 import ConnectedPrinters from "./components/ConnectedPrinters.vue";
 import SettingsDialog from "./components/SettingsDialog.vue";
-import type { PrinterItem, LocalPrinterItem, StatusState, AppConfig } from "./types/printer";
+import type { PrinterItem, LocalPrinterItem, StatusState, AppConfig, DriverInfoUpdate } from "./types/printer";
 
 // ===== 状态 =====
 const credentialStatus = ref<StatusState>("checking");
@@ -26,6 +26,8 @@ const showSettings = ref(false);
 const serverAddr = ref("10.60.254.90");
 
 let unlistenRefresh: UnlistenFn | null = null;
+let unlistenDriver: UnlistenFn | null = null;
+let unlistenDriverComplete: UnlistenFn | null = null;
 
 // ===== 日志 =====
 function setLog(msg: string) {
@@ -71,15 +73,29 @@ async function initApp() {
   await Promise.all([refreshAvailable(), refreshConnected()]);
 }
 
-// ===== 可连接打印机 =====
+// ===== 可连接打印机（渐进式加载 + 缓存） =====
 async function refreshAvailable() {
   loadingAvailable.value = true;
   serverStatus.value = "checking";
+
+  // 1. 尝试读取缓存（秒显）
+  try {
+    const cached = await invoke<PrinterItem[] | null>("get_printer_cache");
+    if (cached && cached.length > 0) {
+      availablePrinters.value = cached;
+      setLog(`已加载缓存（${cached.length} 台），正在刷新...`);
+    }
+  } catch { /* 无缓存，忽略 */ }
+
+  // 2. 快速枚举（1-2s，无驱动信息）
   try {
     const list = await invoke<PrinterItem[]>("get_server_printer_list");
     availablePrinters.value = list;
     serverStatus.value = "ok";
-    setLog(`已发现 ${list.length} 台共享打印机`);
+    setLog(`已发现 ${list.length} 台共享打印机，正在获取驱动信息...`);
+
+    // 3. 启动后台驱动信息获取
+    await invoke("fetch_driver_info_async", { printers: list });
   } catch (e) {
     availablePrinters.value = [];
     serverStatus.value = "error";
@@ -197,6 +213,23 @@ onMounted(async () => {
     // 配置加载失败使用默认值
   }
 
+  // 监听驱动信息逐条更新事件
+  unlistenDriver = await listen<DriverInfoUpdate>("driver-info-updated", (event) => {
+    const { share_path, driver_name } = event.payload;
+    const idx = availablePrinters.value.findIndex(p => p.share_path === share_path);
+    if (idx !== -1) {
+      availablePrinters.value[idx] = { ...availablePrinters.value[idx], driver_name };
+    }
+  });
+
+  // 监听驱动获取完成 → 保存缓存
+  unlistenDriverComplete = await listen<number>("driver-info-complete", async () => {
+    setLog(`已发现 ${availablePrinters.value.length} 台共享打印机`);
+    try {
+      await invoke("save_printer_cache", { printers: availablePrinters.value });
+    } catch { /* 缓存写入失败不影响功能 */ }
+  });
+
   // 监听托盘刷新事件
   unlistenRefresh = await listen("tray-refresh", () => {
     refreshAvailable();
@@ -208,6 +241,8 @@ onMounted(async () => {
 
 onUnmounted(() => {
   if (unlistenRefresh) unlistenRefresh();
+  if (unlistenDriver) unlistenDriver();
+  if (unlistenDriverComplete) unlistenDriverComplete();
 });
 </script>
 

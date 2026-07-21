@@ -127,6 +127,7 @@ function displayName(name: string): string {
 <style scoped>
 .panel {
   height: 100%;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   background: #fff;
