@@ -17,4 +17,4 @@ if ($env:PATH -notlike "*$cargoBin*") {
     $env:PATH = "$cargoBin;$env:PATH"
 }
 
-Write-Host "MSVC 编译环境已就绪 (link.exe 可用)" -ForegroundColor Green
+Write-Host "MSVC The compilation environment is ready (link.exe available)" -ForegroundColor Green
