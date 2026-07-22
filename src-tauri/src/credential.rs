@@ -81,8 +81,7 @@ pub fn read_credential_username(target: &str) -> Result<String, String> {
     }
 }
 
-/// 删除凭据（测试用）
-#[allow(dead_code)]
+/// 删除凭据
 pub fn delete_credential(target: &str) -> Result<(), String> {
     let target_w = HSTRING::from(target);
     unsafe {

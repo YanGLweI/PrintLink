@@ -77,7 +77,7 @@ async function openFolder(name: string) {
 async function handleLogout() {
   try {
     await ElMessageBox.confirm(
-      "退出后将断开共享盘连接并清除保存的凭据，下次需重新输入。",
+      "退出将断开共享盘连接并清除保存的凭据",
       "退出登录",
       { confirmButtonText: "确定退出", cancelButtonText: "取消", type: "warning" }
     );
