@@ -47,7 +47,7 @@ PrintLink 将这一切自动化：**启动即就绪**。程序启动时静默写
 
 ### [⬇️ 下载最新版本（GitHub Releases）](https://github.com/YanGLweI/PrintLink/releases/latest)
 
-当前版本 **v2.1.0** · 安装包仅 ~3.8 MB · Windows 10/11 x64
+![GitHub Release](https://img.shields.io/github/v/release/YanGLweI/PrintLink?label=当前版本&color=2563eb) · 安装包仅 ~3.8 MB · Windows 10/11 x64
 
 </div>
 
@@ -193,7 +193,7 @@ npm run tauri build
 产物位于：
 
 ```
-src-tauri/target/release/bundle/nsis/PrintLink_2.1.0_x64-setup.exe   # NSIS 安装程序
+src-tauri/target/release/bundle/nsis/PrintLink_<version>_x64-setup.exe   # NSIS 安装程序
 src-tauri/target/release/printlink.exe                                # 独立可执行文件
 ```
 
