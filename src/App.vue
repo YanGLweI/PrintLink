@@ -474,24 +474,29 @@ body,
 
 .printer-tabs {
   height: 100%;
+  min-height: 0;
   display: flex;
   flex-direction: column;
 }
 
-.printer-tabs :deep(.el-tabs__content) {
+.printer-tabs .el-tabs__content {
   flex: 1;
+  min-height: 0;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
-.printer-tabs :deep(.el-tab-pane) {
-  height: 100%;
+.printer-tabs .el-tab-pane {
+  flex: 1;
+  min-height: 0;
 }
 
-.printer-tabs :deep(.el-tabs__header) {
+.printer-tabs .el-tabs__header {
   margin-bottom: 12px;
 }
 
-.printer-tabs :deep(.el-tabs__item) {
+.printer-tabs .el-tabs__item {
   font-size: 14px;
   font-weight: 500;
   height: 42px;
@@ -507,7 +512,7 @@ body,
   margin-left: 4px;
 }
 
-.tab-badge :deep(.el-badge__content) {
+.tab-badge .el-badge__content {
   top: 2px;
 }
 
