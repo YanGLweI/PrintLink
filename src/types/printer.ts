@@ -8,6 +8,8 @@ export interface PrinterItem {
   driver_name: string
   /** 设备状态 */
   status: string
+  /** 所属服务器地址（用于区分多服务器来源） */
+  server_addr: string
 }
 
 /** 本地已连接打印机信息 */
@@ -47,4 +49,18 @@ export interface AppConfig {
   username: string
   /** SMB 凭据密码 */
   password: string
+}
+
+/** 附加服务器配置 */
+export interface ExtraServerConfig {
+  server_addr: string
+  username: string
+  credential_saved: boolean
+  created_at: number
+}
+
+/** 多服务器配置容器 */
+export interface MultiServerConfig {
+  main_server_addr?: string
+  extra_servers: ExtraServerConfig[]
 }

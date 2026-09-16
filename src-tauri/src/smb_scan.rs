@@ -32,6 +32,8 @@ pub struct PrinterItem {
     pub driver_name: String,
     /// 设备状态
     pub status: String,
+    /// 所属服务器地址（用于区分多服务器来源）
+    pub server_addr: String,
 }
 
 /// 驱动信息更新事件 payload
@@ -80,12 +82,15 @@ pub async fn fetch_driver_info_async(
     Ok(())
 }
 
-/// 阶段一：快速枚举打印服务器共享打印机（仅名称+路径，不查驱动）
+/// 阶段一：快速枚举打印服务器共享打印机（仅名称 + 路径，不查驱动）
 pub fn scan_server_printers_fast() -> Result<Vec<PrinterItem>, String> {
-    let cfg = config::load_config();
+    // Use get_current_config to respect temporary config set by set_temp_config()
+    let cfg = config::get_current_config();
     let server_addr = &cfg.server_addr;
 
-    // 1. 网络可达性预检
+    log::info!("Scanning server: {}", server_addr);
+
+    // 1. Network reachability check
     check_server_online(server_addr)?;
 
     // 2. 优先使用 EnumPrintersW 枚举，失败则回退 WNet 枚举
@@ -178,6 +183,7 @@ fn parse_printer_info1(info: &PRINTER_INFO_1W, server_addr: &str) -> Option<Prin
         share_path,
         driver_name: "连接后自动识别".to_string(),
         status: "空闲".to_string(),
+        server_addr: server_addr.to_string(),
     })
 }
 
@@ -265,6 +271,7 @@ fn enum_wnet_printers(server_unc: &str, server_addr: &str) -> Result<Vec<Printer
                     share_path: remote_name,
                     driver_name: "连接后自动识别".to_string(),
                     status: "空闲".to_string(),
+                    server_addr: server_addr.to_string(),
                 });
             }
         }
@@ -310,6 +317,27 @@ fn get_remote_driver_info(share_path: &str) -> Option<String> {
 }
 
 // ===== 打印机列表缓存 =====
+
+/// 单服务器缓存结构
+#[derive(Serialize, Deserialize)]
+pub struct ServerPrinterCache {
+    /// 缓存时间戳（Unix seconds）
+    pub timestamp: u64,
+    /// 缓存对应的服务器地址
+    pub server_addr: String,
+    /// 打印机列表
+    pub printers: Vec<PrinterItem>,
+}
+
+/// 获取指定服务器的缓存路径：%APPDATA%/PrintLink/{server_addr}.cache.json
+pub fn get_server_cache_path(server_addr: &str) -> std::path::PathBuf {
+    let appdata = std::env::var("APPDATA").unwrap_or_else(|_| ".".to_string());
+    // 替换 IP 中的点号为下划线，避免文件名非法字符
+    let safe_name = server_addr.replace(".", "_").replace(":", "_");
+    std::path::PathBuf::from(appdata)
+        .join("PrintLink")
+        .join(format!("{}.cache.json", safe_name))
+}
 
 /// 缓存文件结构
 #[derive(Serialize, Deserialize)]
@@ -385,6 +413,7 @@ mod tests {
             share_path: "\\\\10.60.254.90\\HP-M4".to_string(),
             driver_name: "HP Universal".to_string(),
             status: "空闲".to_string(),
+            server_addr: "10.60.254.90".to_string(),
         };
         let json = serde_json::to_string(&item).unwrap();
         assert!(json.contains("HP-M4"));
@@ -433,6 +462,7 @@ mod tests {
                 share_path: "\\\\10.60.254.90\\Test".to_string(),
                 driver_name: "连接后自动识别".to_string(),
                 status: "空闲".to_string(),
+                server_addr: "10.60.254.90".to_string(),
             }],
         };
         let json = serde_json::to_string(&cache).unwrap();

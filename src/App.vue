@@ -9,7 +9,15 @@ import AvailablePrinters from "./components/AvailablePrinters.vue";
 import ConnectedPrinters from "./components/ConnectedPrinters.vue";
 import SettingsDialog from "./components/SettingsDialog.vue";
 import SharedDrive from "./components/SharedDrive.vue";
-import type { PrinterItem, LocalPrinterItem, StatusState, AppConfig, DriverInfoUpdate } from "./types/printer";
+import ExtraServersManager from "./components/ExtraServersManager.vue";
+import type {
+  PrinterItem,
+  LocalPrinterItem,
+  StatusState,
+  AppConfig,
+  DriverInfoUpdate,
+  ExtraServerConfig,
+} from "./types/printer";
 
 // ===== 状态 =====
 const credentialStatus = ref<StatusState>("checking");
@@ -25,6 +33,8 @@ const logMessage = ref("正在初始化...");
 // 设置弹窗
 const showSettings = ref(false);
 const serverAddr = ref("10.60.254.90");
+// 多服务器相关
+const extraServers = ref<ExtraServerConfig[]>([]);
 
 let unlistenRefresh: UnlistenFn | null = null;
 let unlistenDriver: UnlistenFn | null = null;
@@ -79,6 +89,12 @@ async function refreshAvailable() {
   loadingAvailable.value = true;
   serverStatus.value = "checking";
 
+  // 加载附加服务器列表
+  try {
+    const extra = await invoke<ExtraServerConfig[]>("list_extra_servers");
+    extraServers.value = extra;
+  } catch { /* 忽略 */ }
+
   // 1. 尝试读取缓存（秒显）
   try {
     const cached = await invoke<PrinterItem[] | null>("get_printer_cache");
@@ -91,11 +107,26 @@ async function refreshAvailable() {
   // 2. 快速枚举（1-2s，无驱动信息）
   try {
     const list = await invoke<PrinterItem[]>("get_server_printer_list");
-    availablePrinters.value = list;
+    
+    // 3. 获取附加服务器打印机
+    let allPrinters = [...list];
+    
+    for (const server of extraServers.value) {
+      try {
+        const cached = await invoke<PrinterItem[] | null>("get_printer_cache_multi", {
+          serverAddr: server.server_addr,
+        });
+        if (cached && cached.length > 0) {
+          allPrinters.push(...cached);
+        }
+      } catch { /* 忽略扫描失败 */ }
+    }
+    
+    availablePrinters.value = allPrinters;
     serverStatus.value = "ok";
-    setLog(`已发现 ${list.length} 台共享打印机，正在获取驱动信息...`);
+    setLog(`已发现 ${allPrinters.length} 台共享打印机，正在获取驱动信息...`);
 
-    // 3. 启动后台驱动信息获取
+    // 4. 启动后台驱动信息获取
     await invoke("fetch_driver_info_async", { printers: list });
   } catch (e) {
     availablePrinters.value = [];
@@ -214,6 +245,12 @@ onMounted(async () => {
     // 配置加载失败使用默认值
   }
 
+  // 加载附加服务器列表
+  try {
+    const extra = await invoke<ExtraServerConfig[]>("list_extra_servers");
+    extraServers.value = extra;
+  } catch { /* 忽略 */ }
+
   // 监听驱动信息逐条更新事件
   unlistenDriver = await listen<DriverInfoUpdate>("driver-info-updated", (event) => {
     const { share_path, driver_name } = event.payload;
@@ -290,6 +327,7 @@ onUnmounted(() => {
             :connected-names="connectedPrinters.map((p) => p.name.toLowerCase())"
             :connecting-paths="connectingPaths"
             :server-addr="serverAddr"
+            :extra-servers="extraServers"
             @refresh="refreshAvailable"
             @connect="handleConnect"
           />
@@ -328,6 +366,16 @@ onUnmounted(() => {
             </span>
           </template>
           <SharedDrive />
+        </el-tab-pane>
+
+        <el-tab-pane name="extra-servers">
+          <template #label>
+            <span class="tab-label">
+              <el-icon><Connection /></el-icon>
+              连接其他共享打印机
+            </span>
+          </template>
+          <ExtraServersManager @serversUpdated="refreshAvailable" />
         </el-tab-pane>
       </el-tabs>
     </main>
