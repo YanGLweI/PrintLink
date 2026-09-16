@@ -119,7 +119,7 @@ function getShortLabel(addr: string): string {
         class="printer-table"
         empty-text="暂无打印机，该服务器可能已离线"
       >
-        <el-table-column prop="name" label="打印机名称" min-width="160">
+        <el-table-column prop="name" label="打印机名称" min-width="160" show-overflow-tooltip>
           <template #default="{ row }">
             <div class="printer-name-cell">
               <el-icon class="printer-icon"><Printer /></el-icon>
@@ -127,7 +127,7 @@ function getShortLabel(addr: string): string {
             </div>
           </template>
         </el-table-column>
-        <el-table-column prop="share_path" label="共享路径" min-width="220">
+        <el-table-column prop="share_path" label="共享路径" min-width="220" show-overflow-tooltip>
           <template #default="{ row }">
             <div class="share-path-cell">
               <span class="mono">{{ row.share_path }}</span>
@@ -141,7 +141,7 @@ function getShortLabel(addr: string): string {
             </div>
           </template>
         </el-table-column>
-        <el-table-column prop="driver_name" label="驱动名称" min-width="160">
+        <el-table-column prop="driver_name" label="驱动名称" min-width="160" show-overflow-tooltip>
           <template #default="{ row }">
             <span :class="{ 'driver-pending': row.driver_name === '连接后自动识别' }">
               {{ row.driver_name }}

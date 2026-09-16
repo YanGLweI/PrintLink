@@ -46,7 +46,7 @@ function displayName(name: string): string {
       stripe
       class="printer-table"
     >
-      <el-table-column label="打印机名称" min-width="150">
+      <el-table-column label="打印机名称" min-width="150" show-overflow-tooltip>
         <template #default="{ row }">
           <div class="printer-name-cell">
             <el-icon class="printer-icon"><Printer /></el-icon>
@@ -63,12 +63,12 @@ function displayName(name: string): string {
           </div>
         </template>
       </el-table-column>
-      <el-table-column label="端口" min-width="175">
+      <el-table-column label="端口" min-width="175" show-overflow-tooltip>
         <template #default="{ row }">
           <span class="mono">{{ row.port_name }}</span>
         </template>
       </el-table-column>
-      <el-table-column prop="driver_name" label="驱动" min-width="135" />
+      <el-table-column prop="driver_name" label="驱动" min-width="135" show-overflow-tooltip />
       <el-table-column label="状态" width="72" align="center">
         <template #default="{ row }">
           <el-tag size="small" type="success" effect="light">{{ row.status }}</el-tag>

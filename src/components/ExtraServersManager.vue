@@ -158,12 +158,12 @@ onMounted(() => {
       class="server-table"
       empty-text="暂无附加服务器，点击按钮添加"
     >
-      <el-table-column prop="server_addr" label="服务器地址" min-width="180">
+      <el-table-column prop="server_addr" label="服务器地址" min-width="180" show-overflow-tooltip>
         <template #default="{ row }">
           <span class="mono">{{ row.server_addr }}</span>
         </template>
       </el-table-column>
-      <el-table-column prop="username" label="用户名" width="120" />
+      <el-table-column prop="username" label="用户名" width="120" show-overflow-tooltip />
       <el-table-column label="凭据状态" width="100">
         <template #default="{ row }">
           <el-tag v-if="row.credential_saved" size="small" type="success">
@@ -172,7 +172,7 @@ onMounted(() => {
           <el-tag v-else size="small" type="danger">缺失</el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="添加时间" width="160">
+      <el-table-column label="添加时间" width="160" show-overflow-tooltip>
         <template #default="{ row }">
           <span>{{ new Date(row.created_at * 1000).toLocaleString("zh-CN") }}</span>
         </template>
