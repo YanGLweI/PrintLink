@@ -501,9 +501,17 @@ pub async fn remove_extra_server(server_addr: String) -> Result<(), String> {
     
     match idx {
         Some(i) => {
+            // Extract username before removing for logging
+            let username = multi_cfg.extra_servers[i].username.clone();
+            
+            // Delete Windows credentials first (reference: disconnect_shared_drive implementation)
+            let _ = crate::credential::delete_credential(&server_addr);
+            
+            // Remove from configuration
             multi_cfg.extra_servers.remove(i);
             config::save_multi_server_config(&multi_cfg)?;
-            log::info!("已删除服务器：{}", server_addr);
+            
+            log::info!("已删除服务器：{} / {}, 凭据已清除", server_addr, username);
             Ok(())
         }
         None => Err(format!("未找到服务器 {}", server_addr)),

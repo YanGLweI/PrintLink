@@ -201,7 +201,7 @@ onMounted(() => {
 
     <!-- 添加弹窗 -->
     <el-dialog v-model="showAddForm" title="添加 SMB 服务器" width="420px">
-      <el-form :model="addingForm" label-width="80px">
+      <el-form :model="addingForm" label-width="90px">
         <el-form-item label="服务器地址">
           <el-input
             v-model="addingForm.server_addr"
