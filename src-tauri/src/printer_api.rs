@@ -43,22 +43,20 @@ pub async fn connect_printer(printer_path: String) -> Result<String, String> {
     // 提取打印机所属服务器
     let printer_server = extract_printer_server(&printer_path);
     
+    log::info!("开始连接打印机：{}, 服务器：{}", printer_path, printer_server);
+    
     // 检查是否是附加服务器
     let multi_cfg = config::load_multi_server_config();
+    log::info!("附加服务器配置：{:?}", multi_cfg);
+    log::info!("额外服务器列表数量：{}", multi_cfg.extra_servers.len());
+    
     let is_extra_server = multi_cfg.extra_servers.iter().any(|s| s.server_addr == printer_server);
+    log::info!("is_extra_server: {}", is_extra_server);
     
     unsafe {
-        // 如果是附加服务器，先建立 SMB 连接
+        // 如果是附加服务器，记录日志
         if is_extra_server {
-            if let Some(server_info) = multi_cfg.extra_servers.iter().find(|s| s.server_addr == printer_server) {
-                // 建立 SMB 会话（会重用 Windows 保存的凭据）
-                let unc_path = format!("\\\\{}", printer_server);
-                let _ = std::process::Command::new("net")
-                    .args(["use", &unc_path])
-                    .output();
-                
-                log::info!("已为 {} 建立 SMB 会话", printer_server);
-            }
+            log::info!("检测到附加服务器打印机 {}", printer_server);
         }
         
         let path_w = HSTRING::from(&printer_path);
@@ -101,12 +99,15 @@ pub async fn connect_printer(printer_path: String) -> Result<String, String> {
 
 /// 从 UNC 路径提取服务器地址
 fn extract_printer_server(printer_path: &str) -> String {
-    if printer_path.starts_with("\\\\") {
-        let parts: Vec<&str> = printer_path.split('\\').skip(1).collect();
-        if !parts.is_empty() {
-            return parts[0].to_string();
-        }
+    // 格式：\\server\share\printer
+    let path = printer_path.trim_start_matches('\\').trim_start_matches('\\');
+    let parts: Vec<&str> = path.split('\\').collect();
+    
+    if !parts.is_empty() {
+        log::debug!("提取服务器 - 原始：{}, 分割后：{:?}", printer_path, parts);
+        return parts[0].to_string();
     }
+    
     printer_path.to_string()
 }
 
@@ -158,13 +159,8 @@ pub async fn get_local_printer_list() -> Result<Vec<LocalPrinterItem>, String> {
             returned as usize,
         );
 
-        let server_prefix_lower = format!("\\\\{}", cfg.server_addr).to_lowercase();
         for info in infos {
             let name = wide_ptr_to_string(info.pPrinterName.0);
-            // 仅保留目标打印服务器的打印机
-            if !name.to_lowercase().starts_with(&server_prefix_lower) {
-                continue;
-            }
             let port_name = wide_ptr_to_string(info.pPortName.0);
             let driver_name = wide_ptr_to_string(info.pDriverName.0);
             items.push(LocalPrinterItem {

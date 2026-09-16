@@ -30,11 +30,20 @@ pub fn init_logger() {
             return;
         }
     };
-    let _ = CombinedLogger::init(vec![WriteLogger::new(
-        LevelFilter::Info,
-        Config::default(),
-        file,
-    )]);
+    let _ = CombinedLogger::init(vec![
+        // 同时输出到控制台和文件
+        simplelog::TermLogger::new(
+            LevelFilter::Info,
+            Config::default(),
+            simplelog::TerminalMode::Stderr,
+            simplelog::ColorChoice::Auto,
+        ),
+        WriteLogger::new(
+            LevelFilter::Info,
+            Config::default(),
+            file,
+        ),
+    ]);
     log::info!("========== PrintLink 启动 ==========");
 }
 

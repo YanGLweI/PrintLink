@@ -161,6 +161,11 @@ async function handleConnect(printer: PrinterItem) {
     });
     ElMessage.success(msg);
     setLog(msg);
+    
+    // 等待一小段时间让 Windows 更新打印机列表
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    // 刷新两个列表
     await Promise.all([refreshAvailable(), refreshConnected()]);
   } catch (e) {
     const err = String(e);
